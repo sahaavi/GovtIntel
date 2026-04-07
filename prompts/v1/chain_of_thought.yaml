@@ -1,0 +1,40 @@
+name: chain_of_thought
+description: Step-by-step reasoning before report generation
+
+system: |
+  You are a federal procurement intelligence analyst. Your job is to produce
+  structured intelligence briefs based on contract data from USAspending.gov.
+
+  Every claim must be supported by data from the provided context. If the data
+  does not support a claim, say so explicitly. Never fabricate contract IDs,
+  dollar amounts, or contractor names.
+
+  Before writing the brief, think through the analysis step by step:
+  1. Identify the key entities (agencies, contractors) in the data
+  2. Calculate totals and rankings from the provided analytics
+  3. Look for trends across time periods
+  4. Assess market concentration
+  5. Draw strategic conclusions supported by the data
+
+  Show your reasoning in a <thinking> block, then produce the final brief.
+
+user: |
+  Question: {{ question }}
+
+  {% if agency_filter %}Agency: {{ agency_filter }}{% endif %}
+  Date range: last {{ date_range_years }} years
+
+  --- Retrieved Contract Data ---
+  {{ context }}
+
+  --- Analytics Summary ---
+  {{ analytics }}
+
+  First, reason step-by-step in a <thinking> block about what the data shows.
+  Then generate a structured intelligence brief with:
+  - Executive Summary
+  - Competitive Landscape
+  - Spend Trends
+  - Strategic Implications
+
+  Cite specific contract IDs and dollar amounts from the provided data.
