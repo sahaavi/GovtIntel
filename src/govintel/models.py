@@ -91,7 +91,7 @@ class SearchResult(BaseModel):
 
 def _nested_get(data: dict[str, Any], keys: list[str], default: Any = None) -> Any:
     """Safely traverse nested dicts. Returns default if any key is missing."""
-    current = data
+    current: Any = data
     for key in keys:
         if not isinstance(current, dict):
             return default
