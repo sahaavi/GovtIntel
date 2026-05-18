@@ -6,9 +6,11 @@ belongs in ``retrieval/vector.py``.
 
 from __future__ import annotations
 
+import math
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, TypeAlias, cast
+from typing import Any, Protocol, TypeAlias, cast
 
 import chromadb
 from sentence_transformers import SentenceTransformer
@@ -16,6 +18,14 @@ from sentence_transformers import SentenceTransformer
 MetadataScalar: TypeAlias = str | int | float | bool | None
 MetadataListValue: TypeAlias = list[str | int | float | bool]
 MetadataValue: TypeAlias = MetadataScalar | MetadataListValue
+SENTENCE_PATTERN = re.compile(r"[^.!?]+(?:[.!?]+|$)")
+
+
+class TextEncoder(Protocol):
+    """Minimal text embedding interface used by semantic chunking."""
+
+    def encode(self, texts: list[str]) -> list[list[float]]:
+        """Encode texts into dense vectors."""
 
 
 @dataclass(frozen=True)
@@ -75,6 +85,104 @@ class EmbeddingModel:
             normalize_embeddings=True,
         )
         return [list(map(float, vector)) for vector in vectors]
+
+
+def chunk_fixed(text: str, size: int, overlap: int) -> list[str]:
+    """Split text into fixed character windows with overlap."""
+
+    if size <= 0:
+        raise ValueError("size must be positive")
+    if overlap < 0:
+        raise ValueError("overlap must be non-negative")
+    if overlap >= size:
+        raise ValueError("overlap must be smaller than size")
+
+    normalized = text.strip()
+    if not normalized:
+        return []
+
+    step = size - overlap
+    chunks: list[str] = []
+    for start in range(0, len(normalized), step):
+        chunk = normalized[start : start + size]
+        if chunk:
+            chunks.append(chunk)
+        if start + size >= len(normalized):
+            break
+
+    return chunks
+
+
+def chunk_sentence(text: str, max_sentences: int) -> list[str]:
+    """Split text into chunks containing up to max_sentences complete sentences."""
+
+    if max_sentences <= 0:
+        raise ValueError("max_sentences must be positive")
+
+    sentences = _split_sentences(text)
+    if not sentences:
+        return []
+
+    chunks: list[str] = []
+    for start in range(0, len(sentences), max_sentences):
+        chunks.append(" ".join(sentences[start : start + max_sentences]))
+    return chunks
+
+
+def chunk_semantic(
+    text: str,
+    *,
+    model_name: str = "all-MiniLM-L6-v2",
+    similarity_threshold: float = 0.75,
+    embedding_model: TextEncoder | None = None,
+) -> list[str]:
+    """Split text where adjacent sentence embeddings show a topic shift."""
+
+    if not 0.0 <= similarity_threshold <= 1.0:
+        raise ValueError("similarity_threshold must be between 0 and 1")
+
+    sentences = _split_sentences(text)
+    if len(sentences) <= 1:
+        return sentences
+
+    encoder = embedding_model if embedding_model is not None else EmbeddingModel(model_name)
+    embeddings = encoder.encode(sentences)
+    chunks: list[list[str]] = [[sentences[0]]]
+
+    for index in range(1, len(sentences)):
+        similarity = _cosine_similarity(embeddings[index - 1], embeddings[index])
+        if similarity < similarity_threshold:
+            chunks.append([sentences[index]])
+        else:
+            chunks[-1].append(sentences[index])
+
+    return [" ".join(chunk) for chunk in chunks]
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Return normalized sentences while preserving terminal punctuation."""
+
+    normalized = text.strip()
+    if not normalized:
+        return []
+
+    sentences: list[str] = []
+    for match in SENTENCE_PATTERN.finditer(normalized):
+        sentence = " ".join(match.group(0).split())
+        if sentence:
+            sentences.append(sentence)
+    return sentences
+
+
+def _cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
+    """Compute cosine similarity for two embedding vectors."""
+
+    dot_product = sum(left_value * right_value for left_value, right_value in zip(left, right))
+    left_norm = math.sqrt(sum(value * value for value in left))
+    right_norm = math.sqrt(sum(value * value for value in right))
+    if left_norm == 0.0 or right_norm == 0.0:
+        return 0.0
+    return dot_product / (left_norm * right_norm)
 
 
 def _build_ids(metadata: list[dict[str, Any]]) -> list[str]:
@@ -236,4 +344,11 @@ def _upsert_to_pinecone(
     index.upsert(vectors=records)
 
 
-__all__ = ["EmbeddingModel", "SUPPORTED_MODELS", "embed_and_load"]
+__all__ = [
+    "EmbeddingModel",
+    "SUPPORTED_MODELS",
+    "chunk_fixed",
+    "chunk_semantic",
+    "chunk_sentence",
+    "embed_and_load",
+]
