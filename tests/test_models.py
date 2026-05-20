@@ -55,6 +55,49 @@ class TestContractAward:
         award = ContractAward.from_usaspending(raw)
         assert award.award_amount == 0.0
 
+    def test_from_usaspending_search_award_flat_fields(self) -> None:
+        raw: dict[str, Any] = {
+            "generated_internal_id": "CONT_AWD_005",
+            "Award ID": "70FA3024C00000001",
+            "Recipient Name": "Example Corp",
+            "Awarding Agency": "Department of Homeland Security",
+            "Award Amount": 1_250_000.0,
+            "Start Date": "2024-01-01",
+            "End Date": "2025-01-01",
+            "NAICS": "541512",
+            "Description": "Cybersecurity services",
+            "Place of Performance State Code": "VA",
+            "Contract Award Type": "Definitive Contract",
+        }
+
+        award = ContractAward.from_usaspending(raw)
+
+        assert award.award_id == "CONT_AWD_005"
+        assert award.recipient_name == "Example Corp"
+        assert award.awarding_agency == "Department of Homeland Security"
+        assert award.award_amount == 1_250_000.0
+        assert award.start_date == date(2024, 1, 1)
+        assert award.end_date == date(2025, 1, 1)
+        assert award.naics_code == "541512"
+        assert award.description == "Cybersecurity services"
+        assert award.place_of_performance_state == "VA"
+        assert award.award_type == "Definitive Contract"
+
+    def test_from_usaspending_search_award_extracts_naics_code_object(self) -> None:
+        raw: dict[str, Any] = {
+            "generated_internal_id": "CONT_AWD_006",
+            "Recipient Name": "Example Corp",
+            "Awarding Agency": "Department of State",
+            "Award Amount": 1_250_000.0,
+            "Start Date": "2024-01-01",
+            "NAICS": {"code": "541512", "description": "Computer systems design services"},
+            "Description": "IT consolidation support",
+        }
+
+        award = ContractAward.from_usaspending(raw)
+
+        assert award.naics_code == "541512"
+
     def test_serialization_roundtrip(self, sample_contract: ContractAward) -> None:
         data = sample_contract.model_dump()
         restored = ContractAward(**data)

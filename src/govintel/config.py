@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     # USAspending API
     usaspending_base_url: str = "https://api.usaspending.gov/api/v2"
+    ingestion_naics_code: str = "541512"
+    ingestion_max_pages: int = 2
+    ingestion_page_size: int = 100
 
     # Gemini
     gemini_api_key: str = ""

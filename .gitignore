@@ -210,3 +210,7 @@ __marimo__/
 data/raw/
 data/training/
 eval/results/
+
+# Local learning notes and generated explanations
+*.md
+!README.md

@@ -15,6 +15,45 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 100
 RATE_LIMIT_DELAY_SECONDS = 0.5
+CONTRACT_AWARD_TYPE_CODES = ["A", "B", "C", "D"]
+DEFAULT_AWARD_FIELDS = [
+    "generated_internal_id",
+    "Award ID",
+    "Recipient Name",
+    "Awarding Agency",
+    "Award Amount",
+    "Start Date",
+    "End Date",
+    "NAICS",
+    "Description",
+    "Place of Performance State Code",
+    "Contract Award Type",
+]
+
+
+def build_contract_award_filters(
+    *,
+    naics_code: str | None = None,
+    agency: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> dict[str, Any]:
+    """Build a small USAspending filter object for contract awards."""
+
+    filters: dict[str, Any] = {"award_type_codes": list(CONTRACT_AWARD_TYPE_CODES)}
+    if naics_code:
+        filters["naics_codes"] = {"require": [naics_code]}
+    if agency:
+        filters["agencies"] = [
+            {
+                "type": "awarding",
+                "tier": "toptier",
+                "name": agency,
+            }
+        ]
+    if start_date and end_date:
+        filters["time_period"] = [{"start_date": start_date, "end_date": end_date}]
+    return filters
 
 
 class USAspendingClient:
@@ -45,6 +84,7 @@ class USAspendingClient:
         filters: dict[str, Any],
         page: int = 1,
         limit: int = DEFAULT_PAGE_SIZE,
+        fields: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Search contract awards with the given filters.
 
@@ -56,9 +96,28 @@ class USAspendingClient:
         Returns:
             List of raw award dicts from the API response.
         """
+        results, _ = await self._search_awards_page(
+            filters=filters,
+            page=page,
+            limit=limit,
+            fields=fields,
+        )
+        return results
+
+    async def _search_awards_page(
+        self,
+        *,
+        filters: dict[str, Any],
+        page: int,
+        limit: int,
+        fields: list[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Search one award page and return rows plus pagination metadata."""
         client = await self._get_client()
         payload = {
+            "subawards": False,
             "filters": filters,
+            "fields": fields or DEFAULT_AWARD_FIELDS,
             "page": page,
             "limit": limit,
             "sort": "Award Amount",
@@ -69,7 +128,7 @@ class USAspendingClient:
         response.raise_for_status()
 
         data = response.json()
-        return data.get("results", [])
+        return data.get("results", []), data.get("page_metadata", {})
 
     async def fetch_all_awards(
         self,
@@ -93,7 +152,11 @@ class USAspendingClient:
         for page in range(1, max_pages + 1):
             logger.info("Fetching page %d (limit=%d)", page, page_size)
 
-            results = await self.search_awards(filters=filters, page=page, limit=page_size)
+            results, page_metadata = await self._search_awards_page(
+                filters=filters,
+                page=page,
+                limit=page_size,
+            )
 
             if not results:
                 logger.info("No more results at page %d, stopping", page)
@@ -105,10 +168,19 @@ class USAspendingClient:
                 except Exception:
                     logger.warning("Failed to parse award: %s", raw.get("id", "unknown"))
 
-            if len(results) < page_size:
+            has_next = bool(page_metadata.get("hasNext", len(results) == page_size))
+            if not has_next:
                 break
 
             await asyncio.sleep(RATE_LIMIT_DELAY_SECONDS)
 
         logger.info("Fetched %d awards total", len(awards))
         return awards
+
+
+__all__ = [
+    "CONTRACT_AWARD_TYPE_CODES",
+    "DEFAULT_AWARD_FIELDS",
+    "USAspendingClient",
+    "build_contract_award_filters",
+]

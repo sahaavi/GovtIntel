@@ -26,21 +26,51 @@ class ContractAward(BaseModel):
     def from_usaspending(cls, raw: dict[str, Any]) -> ContractAward:
         """Parse a USAspending API response into a ContractAward.
 
-        Handles nested field paths from the USAspending /awards/ endpoint.
+        Handles both nested award-detail responses and flat
+        /search/spending_by_award rows.
         """
         return cls(
-            award_id=raw.get("generated_internal_id", raw.get("id", "")),
-            recipient_name=_nested_get(raw, ["recipient", "recipient_name"], "Unknown"),
-            awarding_agency=_nested_get(
-                raw, ["awarding_agency", "toptier_agency", "name"], "Unknown"
+            award_id=_first_present(raw, "generated_internal_id", "Award ID", "id", default=""),
+            recipient_name=_first_present(
+                raw,
+                "Recipient Name",
+                default=_nested_get(raw, ["recipient", "recipient_name"], "Unknown"),
             ),
-            award_amount=float(raw.get("total_obligation", 0) or 0),
-            start_date=raw.get("period_of_performance_start_date", "2000-01-01"),
-            end_date=raw.get("period_of_performance_current_end_date"),
-            naics_code=raw.get("naics_code", "") or "",
-            description=raw.get("description", "") or "",
-            place_of_performance_state=_nested_get(raw, ["place_of_performance", "state_code"], ""),
-            award_type=raw.get("type_description", "") or "",
+            awarding_agency=_first_present(
+                raw,
+                "Awarding Agency",
+                default=_nested_get(raw, ["awarding_agency", "toptier_agency", "name"], "Unknown"),
+            ),
+            award_amount=float(
+                _first_present(raw, "Award Amount", "total_obligation", default=0) or 0
+            ),
+            start_date=_first_present(
+                raw,
+                "Start Date",
+                "Period of Performance Start Date",
+                "period_of_performance_start_date",
+                default="2000-01-01",
+            ),
+            end_date=_first_present(
+                raw,
+                "End Date",
+                "Period of Performance Current End Date",
+                "period_of_performance_current_end_date",
+            ),
+            naics_code=_naics_code(_first_present(raw, "NAICS", "naics_code", default="")),
+            description=_first_present(raw, "Description", "description", default=""),
+            place_of_performance_state=_first_present(
+                raw,
+                "Place of Performance State Code",
+                default=_nested_get(raw, ["place_of_performance", "state_code"], ""),
+            ),
+            award_type=_first_present(
+                raw,
+                "Contract Award Type",
+                "Award Type",
+                "type_description",
+                default="",
+            ),
         )
 
 
@@ -99,3 +129,20 @@ def _nested_get(data: dict[str, Any], keys: list[str], default: Any = None) -> A
         if current is None:
             return default
     return current
+
+
+def _first_present(data: dict[str, Any], *keys: str, default: Any = None) -> Any:
+    """Return the first non-empty value from a raw USAspending payload."""
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, ""):
+            return value
+    return default
+
+
+def _naics_code(value: Any) -> str:
+    """Normalize USAspending NAICS values to the code string."""
+
+    if isinstance(value, dict):
+        return str(value.get("code", "") or "")
+    return str(value or "")

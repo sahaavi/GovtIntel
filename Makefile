@@ -1,4 +1,6 @@
-.PHONY: install test lint format run clean
+PYTHON ?= python3
+
+.PHONY: install test lint format run db-up db-down db-seed clean
 
 install:
 	pip install -e ".[dev]"
@@ -19,6 +21,15 @@ format:
 
 run:
 	uvicorn govintel.api.app:create_app --factory --reload --host 0.0.0.0 --port 8000
+
+db-up:
+	docker compose up -d postgres
+
+db-down:
+	docker compose down
+
+db-seed:
+	$(PYTHON) -m govintel.ingestion.bootstrap
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
