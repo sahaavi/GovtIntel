@@ -31,6 +31,8 @@ retrieval workflows.
   interface.
 - Citation-grounded report generation that validates cited contract IDs against
   retrieved evidence before returning a brief.
+- Offline evaluation harness with procurement-specific metrics, optional RAGAS
+  scoring, annotated gold queries, and ablation-result table rendering.
 - FastAPI service entry point with health checks, request validation, and
   `/api/v1/analyze` report generation.
 - Notebook-based retrieval and chunking benchmark workflow backed by real
@@ -82,9 +84,11 @@ src/govintel/
   ingestion/    USAspending client, PostgreSQL loader, embeddings, chunking
   retrieval/    BM25, vector search, hybrid retrieval, and reranking
   analysis/     SQL analytics for contractor rankings, trends, and HHI
+  evaluation/   Custom metrics, optional RAGAS adapter, and ablation runner
   generation/   Prompt loading, LLM clients, report orchestration, citations
   models.py     Shared Pydantic domain models
 
+eval/           Annotated evaluation queries and gold answers
 notebooks/      Retrieval and chunking evaluation notebooks
 prompts/        YAML prompt templates
 tests/          Unit and integration-style test coverage
@@ -185,7 +189,16 @@ metrics.
 
 ```bash
 pytest -q
+pytest tests/test_evaluation -q
 ruff check src/ tests/
+```
+
+The evaluation harness is designed to run in the base development environment.
+RAGAS remains an optional offline dependency; install the eval extra before
+running live RAGAS scoring:
+
+```bash
+pip install -e ".[dev,eval]"
 ```
 
 ## Data Model
