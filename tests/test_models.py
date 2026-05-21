@@ -126,11 +126,21 @@ class TestAnalysisQuery:
         with pytest.raises(Exception):
             AnalysisQuery(question="Hi")
 
+    def test_question_too_long(self) -> None:
+        with pytest.raises(Exception):
+            AnalysisQuery(question="x" * 501)
+
     def test_date_range_bounds(self) -> None:
         with pytest.raises(Exception):
             AnalysisQuery(question="Valid question here", date_range_years=0)
         with pytest.raises(Exception):
             AnalysisQuery(question="Valid question here", date_range_years=11)
+
+    def test_naics_filter_accepts_only_codes(self) -> None:
+        AnalysisQuery(question="Valid question here", naics_filter="541512")
+
+        with pytest.raises(Exception):
+            AnalysisQuery(question="Valid question here", naics_filter="54%")
 
 
 class TestContractorSummary:

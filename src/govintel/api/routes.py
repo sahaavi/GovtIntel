@@ -1,14 +1,21 @@
 """API route definitions."""
 
-from typing import Any
+import logging
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
-from govintel.api.dependencies import get_cached_settings
-from govintel.config import Settings
-from govintel.models import AnalysisQuery
+from govintel.api.dependencies import get_report_generator
+from govintel.generation.gemini import LLMGenerationError
+from govintel.generation.report import (
+    CitationValidationError,
+    InsufficientEvidenceError,
+    ReportGenerator,
+    ReportParsingError,
+)
+from govintel.models import AnalysisQuery, IntelligenceBrief
 
 router = APIRouter(prefix="/api/v1")
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -20,14 +27,14 @@ async def health() -> dict[str, str]:
 @router.post("/analyze")
 async def analyze(
     query: AnalysisQuery,
-    settings: Settings = Depends(get_cached_settings),
-) -> dict[str, Any]:
-    """Generate a procurement intelligence brief.
+    generator: ReportGenerator = Depends(get_report_generator),
+) -> IntelligenceBrief:
+    """Generate a procurement intelligence brief from retrieved contract evidence."""
 
-    Stub implementation — will be wired to the full RAG pipeline in Phase 5.
-    """
-    return {
-        "status": "stub",
-        "query": query.question,
-        "message": "Analysis pipeline not yet implemented",
-    }
+    try:
+        return await generator.generate(query, strategy="zero_shot")
+    except (CitationValidationError, InsufficientEvidenceError, ReportParsingError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except LLMGenerationError as exc:
+        logger.warning("LLM provider failure", exc_info=exc)
+        raise HTTPException(status_code=502, detail="Generation provider failed") from exc

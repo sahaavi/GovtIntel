@@ -24,8 +24,15 @@ retrieval workflows.
   Pinecone mirroring.
 - BM25 keyword retrieval, vector retrieval, hybrid retrieval, and cross-encoder
   reranking components.
+- SQL analytics for top contractors, quarterly spend trends, and market
+  concentration.
 - Versioned YAML prompt templates rendered with Jinja2.
-- FastAPI service entry point with health checks and request validation.
+- Gemini Flash and HuggingFace/Mistral generation clients behind a common async
+  interface.
+- Citation-grounded report generation that validates cited contract IDs against
+  retrieved evidence before returning a brief.
+- FastAPI service entry point with health checks, request validation, and
+  `/api/v1/analyze` report generation.
 - Notebook-based retrieval and chunking benchmark workflow backed by real
   PostgreSQL data.
 
@@ -45,7 +52,11 @@ flowchart LR
     I --> K[Hybrid Retriever]
     J --> K
     K --> L[Cross-Encoder Reranker]
-    L --> M[Procurement Intelligence Context]
+    D --> M[SQL Analytics]
+    L --> N[Procurement Intelligence Context]
+    M --> N
+    N --> O[Gemini or Mistral Generator]
+    O --> P[Citation-Validated Brief]
 ```
 
 ## Tech Stack
@@ -60,6 +71,7 @@ flowchart LR
 - Pinecone support for managed vector search
 - rank-bm25 for lexical retrieval
 - Jinja2 and PyYAML for prompt template management
+- RAGAS is available as an optional evaluation extra for offline eval work
 - pytest and Ruff for automated quality checks
 
 ## Repository Layout
@@ -69,7 +81,8 @@ src/govintel/
   api/          FastAPI application factory, routes, and dependencies
   ingestion/    USAspending client, PostgreSQL loader, embeddings, chunking
   retrieval/    BM25, vector search, hybrid retrieval, and reranking
-  generation/   Versioned prompt template loader
+  analysis/     SQL analytics for contractor rankings, trends, and HHI
+  generation/   Prompt loading, LLM clients, report orchestration, citations
   models.py     Shared Pydantic domain models
 
 notebooks/      Retrieval and chunking evaluation notebooks
@@ -109,6 +122,11 @@ The default `.env.example` is configured for the local PostgreSQL service in
 `docker-compose.yml`. The ingestion defaults import a bounded slice of contract
 awards for NAICS `541512`.
 
+To use `/api/v1/analyze`, set `GENERATION_PROVIDER=gemini` with
+`GEMINI_API_KEY`, or set `GENERATION_PROVIDER=mistral` with `HF_API_TOKEN`.
+`HF_MODEL_ID` is optional and defaults to the fine-tuned GovIntel Mistral model
+identifier used by the project plan.
+
 ### Start PostgreSQL
 
 ```bash
@@ -145,6 +163,15 @@ is available at:
 
 ```bash
 curl http://localhost:8000/api/v1/health
+```
+
+Generate a procurement intelligence brief after seeding contract data and
+configuring a generation provider:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"question":"Who are the top DHS cybersecurity contractors?","agency_filter":"DHS"}'
 ```
 
 ### Run the Benchmark Notebook

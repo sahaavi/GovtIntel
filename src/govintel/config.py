@@ -1,5 +1,6 @@
 """Application configuration via environment variables."""
 
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 
@@ -24,9 +25,19 @@ class Settings(BaseSettings):
     pinecone_api_key: str = ""
     pinecone_index_name: str = "govintel"
 
+    # Retrieval
+    chromadb_path: str = "./data/chromadb"
+    chroma_collection_name: str = "contracts"
+    embedding_model_name: str = "all-MiniLM-L6-v2"
+
     # HuggingFace
     hf_api_token: str = ""
     hf_model_id: str = ""
+
+    # Generation
+    generation_provider: str = "gemini"
+    prompt_version: str = "v1"
+    retrieval_corpus_limit: int = Field(default=5_000, ge=1, le=25_000)
 
     # Langfuse
     langfuse_public_key: str = ""

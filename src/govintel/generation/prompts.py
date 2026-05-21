@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from jinja2 import Template
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts"

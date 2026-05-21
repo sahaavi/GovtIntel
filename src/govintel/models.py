@@ -77,12 +77,20 @@ class ContractAward(BaseModel):
 class AnalysisQuery(BaseModel):
     """User query for procurement intelligence analysis."""
 
-    question: str = Field(min_length=5, description="The analysis question")
-    agency_filter: str | None = Field(default=None, description="Filter by awarding agency name")
+    question: str = Field(min_length=5, max_length=500, description="The analysis question")
+    agency_filter: str | None = Field(
+        default=None,
+        max_length=120,
+        description="Filter by awarding agency name",
+    )
     date_range_years: int = Field(
         default=3, ge=1, le=10, description="How many years of data to analyze"
     )
-    naics_filter: str | None = Field(default=None, description="Filter by NAICS code")
+    naics_filter: str | None = Field(
+        default=None,
+        pattern=r"^\d{2,6}$",
+        description="Filter by NAICS code",
+    )
 
 
 class ContractorSummary(BaseModel):
