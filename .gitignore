@@ -211,6 +211,15 @@ data/raw/
 data/training/
 eval/results/
 
+# Fine-tuning outputs and model artifacts
+checkpoints/
+lora_adapters/
+merged_16bit/
+*.safetensors
+*.gguf
+adapter_model.bin
+adapter_config.json
+
 # Local learning notes and generated explanations
 *.md
 !README.md

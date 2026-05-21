@@ -33,6 +33,9 @@ retrieval workflows.
   retrieved evidence before returning a brief.
 - Offline evaluation harness with procurement-specific metrics, optional RAGAS
   scoring, annotated gold queries, and ablation-result table rendering.
+- Offline fine-tuning workflow: synthetic JSONL training-data generation,
+  Kaggle QLoRA notebook, and decoding-parameter experiments for the fine-tuned
+  Mistral path.
 - FastAPI service entry point with health checks, request validation, and
   `/api/v1/analyze` report generation.
 - Notebook-based retrieval and chunking benchmark workflow backed by real
@@ -86,6 +89,7 @@ src/govintel/
   analysis/     SQL analytics for contractor rankings, trends, and HHI
   evaluation/   Custom metrics, optional RAGAS adapter, and ablation runner
   generation/   Prompt loading, LLM clients, report orchestration, citations
+  training/     Offline synthetic-data and decoding experiment helpers
   models.py     Shared Pydantic domain models
 
 eval/           Annotated evaluation queries and gold answers
@@ -184,6 +188,42 @@ Open `notebooks/02_chunking_benchmark.ipynb` in Jupyter or a compatible notebook
 environment after seeding PostgreSQL. The notebook reads contract descriptions
 from the `contracts` table and compares chunking strategies against retrieval
 metrics.
+
+### Generate Fine-Tuning Data
+
+Phase 7 adds an offline training lane. A local smoke run does not require
+PostgreSQL or Gemini:
+
+```bash
+python3 -m govintel.training.synthetic \
+  --dry-run \
+  --limit 5 \
+  --output /tmp/govintel_training_sample.jsonl
+```
+
+For a real synthetic dataset, seed PostgreSQL, set `GEMINI_API_KEY`, then run:
+
+```bash
+python3 -m govintel.training.synthetic \
+  --limit 500 \
+  --contracts-per-group 5 \
+  --output data/training/govintel_synthetic.jsonl
+```
+
+Hand-curate at least 50 high-quality examples before fine-tuning. Files under
+`data/training/` are ignored by Git and should stay local or in a private data
+store.
+
+### Fine-Tune and Decode
+
+Use `notebooks/04_fine_tuning.ipynb` on Kaggle with GPU enabled. The notebook
+uses Unsloth with `mistral-7b-instruct-v0.3-bnb-4bit`, LoRA rank 16, three
+training epochs, five held-out validation examples, and HuggingFace Hub publish
+cells. Use a write-scoped `HF_WRITE_TOKEN` secret for publishing.
+
+Use `notebooks/05_decoding_experiments.ipynb` after publishing the model. It
+tests temperature `0.0`, `0.3`, `0.7`; top-k `50`, `100`; and top-p `0.9`,
+`0.95`, then writes scored results under `eval/results/`.
 
 ## Quality Checks
 
